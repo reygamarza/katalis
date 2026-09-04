@@ -1,0 +1,51 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           BigInt   @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  userRoles    UserRole[]
+
+  @@map("users")
+}
+
+model Role {
+  id   BigInt @id @default(autoincrement())
+  name String @unique // OWNER, KASIR, GUDANG, FINANCE
+
+  userRoles UserRole[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  id     BigInt @id @default(autoincrement())
+  userId BigInt @map("user_id")
+  roleId BigInt @map("role_id")
+
+  user User @relation(fields: [userId], references: [id])
+  role Role @relation(fields: [roleId], references: [id])
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model Location {
+  id       BigInt  @id @default(autoincrement())
+  name     String
+  type     String  // STORE, WAREHOUSE
+  isActive Boolean @default(true) @map("is_active")
+
+  @@map("locations")
+}
