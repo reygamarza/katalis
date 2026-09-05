@@ -16,6 +16,10 @@ model User {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   userRoles    UserRole[]
+  createdPurchases   Purchase[] @relation("PurchaseCreatedBy")
+  confirmedPurchases Purchase[] @relation("PurchaseConfirmedBy")
+  receivings         Receiving[]
+  purchaseReturns    PurchaseReturn[]
 
   @@map("users")
 }
@@ -48,6 +52,7 @@ model Location {
   isActive Boolean @default(true) @map("is_active")
 
   inventories Inventory[]
+  purchases Purchase[]
 
   @@map("locations")
 }
@@ -72,6 +77,9 @@ model Supplier {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  purchases       Purchase[]
+  purchaseReturns PurchaseReturn[]
+
   @@map("suppliers")
 }
 
@@ -88,6 +96,7 @@ model Product {
 
   category      Category    @relation(fields: [categoryId], references: [id])
   inventories   Inventory[]
+  purchaseItems PurchaseItem[]
 
   @@map("products")
 }
@@ -105,4 +114,111 @@ model Inventory {
 
   @@unique([productId, locationId])
   @@map("inventories")
+}
+
+enum PurchaseStatus {
+  DRAFT
+  CONFIRMED
+  PARTIALLY_RECEIVED
+  FULLY_RECEIVED
+  CANCELLED
+}
+
+model Purchase {
+  id             BigInt         @id @default(autoincrement())
+  purchaseNumber String         @unique @map("purchase_number")
+  supplierId     BigInt         @map("supplier_id")
+  locationId     BigInt         @map("location_id")
+  createdBy      BigInt         @map("created_by")
+  confirmedBy    BigInt?        @map("confirmed_by")
+  status         PurchaseStatus @default(DRAFT)
+  createdAt      DateTime       @default(now()) @map("created_at")
+  confirmedAt    DateTime?      @map("confirmed_at")
+  cancelledAt    DateTime?      @map("cancelled_at")
+
+  supplier  Supplier @relation(fields: [supplierId], references: [id])
+  location  Location @relation(fields: [locationId], references: [id])
+  creator   User     @relation("PurchaseCreatedBy", fields: [createdBy], references: [id])
+  confirmer User?    @relation("PurchaseConfirmedBy", fields: [confirmedBy], references: [id])
+
+  items      PurchaseItem[]
+  receivings Receiving[]
+  returns    PurchaseReturn[]
+
+  @@map("purchases")
+}
+
+model PurchaseItem {
+  id                BigInt  @id @default(autoincrement())
+  purchaseId        BigInt  @map("purchase_id")
+  productId         BigInt  @map("product_id")
+  quantityOrdered   Int     @map("quantity_ordered")
+  unitPurchasePrice Decimal @map("unit_purchase_price") @db.Decimal(12, 2)
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id])
+  product  Product  @relation(fields: [productId], references: [id])
+
+  receivingItems ReceivingItem[]
+
+  @@map("purchase_items")
+}
+
+model Receiving {
+  id              BigInt   @id @default(autoincrement())
+  receivingNumber String   @unique @map("receiving_number")
+  purchaseId      BigInt   @map("purchase_id")
+  receivedBy      BigInt   @map("received_by")
+  receivedAt      DateTime @map("received_at")
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id])
+  receiver User     @relation(fields: [receivedBy], references: [id])
+
+  items ReceivingItem[]
+
+  @@map("receivings")
+}
+
+model ReceivingItem {
+  id                      BigInt  @id @default(autoincrement())
+  receivingId             BigInt  @map("receiving_id")
+  purchaseItemId          BigInt  @map("purchase_item_id")
+  quantityReceived        Int     @map("quantity_received")
+  unitPurchasePriceActual Decimal @map("unit_purchase_price_actual") @db.Decimal(12, 2)
+
+  receiving    Receiving    @relation(fields: [receivingId], references: [id])
+  purchaseItem PurchaseItem @relation(fields: [purchaseItemId], references: [id])
+
+  purchaseReturnItems PurchaseReturnItem[]
+
+  @@map("receiving_items")
+}
+
+model PurchaseReturn {
+  id           BigInt   @id @default(autoincrement())
+  returnNumber String   @unique @map("return_number")
+  purchaseId   BigInt   @map("purchase_id")
+  supplierId   BigInt   @map("supplier_id")
+  createdBy    BigInt   @map("created_by")
+  reason       String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id])
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+  creator  User     @relation(fields: [createdBy], references: [id])
+
+  items PurchaseReturnItem[]
+
+  @@map("purchase_returns")
+}
+
+model PurchaseReturnItem {
+  id               BigInt @id @default(autoincrement())
+  purchaseReturnId BigInt @map("purchase_return_id")
+  receivingItemId  BigInt @map("receiving_item_id")
+  quantityReturned Int    @map("quantity_returned")
+
+  purchaseReturn PurchaseReturn @relation(fields: [purchaseReturnId], references: [id])
+  receivingItem  ReceivingItem  @relation(fields: [receivingItemId], references: [id])
+
+  @@map("purchase_return_items")
 }
