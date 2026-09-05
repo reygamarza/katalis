@@ -22,6 +22,12 @@ model User {
   purchaseReturns    PurchaseReturn[]
   sales           Sale[]
   saleReturns     SaleReturn[]
+  startedStockOpnames  StockOpname[]   @relation("StockOpnameStartedBy")
+  reviewedStockOpnames StockOpname[]   @relation("StockOpnameReviewedBy")
+  stockMovements       StockMovement[]
+  createdExpenses      Expense[]       @relation("ExpenseCreatedBy")
+  approvedExpenses     Expense[]       @relation("ExpenseApprovedBy")
+  auditLogs            AuditLog[]
 
   @@map("users")
 }
@@ -56,6 +62,8 @@ model Location {
   inventories Inventory[]
   purchases Purchase[]
   sales Sale[]
+  stockOpnames   StockOpname[]
+  stockMovements StockMovement[]
 
   @@map("locations")
 }
@@ -101,6 +109,8 @@ model Product {
   inventories   Inventory[]
   purchaseItems PurchaseItem[]
   saleItems SaleItem[]
+  stockOpnameItems StockOpnameItem[]
+  stockMovements   StockMovement[]
 
   @@map("products")
 }
@@ -353,4 +363,126 @@ model PaymentAttempt {
   sale Sale @relation(fields: [saleId], references: [id])
 
   @@map("payment_attempts")
+}
+
+enum StockOpnameStatus {
+  SUBMITTED
+  APPROVED
+  REJECTED
+  NEEDS_RECOUNT
+}
+
+enum ExpenseStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum StockMovementSourceType {
+  RECEIVING
+  SALE
+  OPNAME_ADJUSTMENT
+  SALE_RETURN
+  PURCHASE_RETURN
+}
+
+model StockOpname {
+  id           BigInt            @id @default(autoincrement())
+  opnameNumber String            @unique @map("opname_number")
+  locationId   BigInt            @map("location_id")
+  startedBy    BigInt            @map("started_by")
+  reviewedBy   BigInt?           @map("reviewed_by")
+  status       StockOpnameStatus @default(SUBMITTED)
+  startedAt    DateTime          @map("started_at")
+  submittedAt  DateTime?         @map("submitted_at")
+  reviewedAt   DateTime?         @map("reviewed_at")
+  rejectReason String?           @map("reject_reason")
+
+  location Location @relation(fields: [locationId], references: [id])
+  starter  User     @relation("StockOpnameStartedBy", fields: [startedBy], references: [id])
+  reviewer User?    @relation("StockOpnameReviewedBy", fields: [reviewedBy], references: [id])
+
+  items StockOpnameItem[]
+
+  @@map("stock_opnames")
+}
+
+model StockOpnameItem {
+  id                     BigInt  @id @default(autoincrement())
+  stockOpnameId          BigInt  @map("stock_opname_id")
+  productId              BigInt  @map("product_id")
+  systemQtySnapshot      Int     @map("system_qty_snapshot")
+  physicalQty            Int     @map("physical_qty")
+  difference             Int
+  systemQtyAtAdjustment  Int?    @map("system_qty_at_adjustment")
+  adjustmentDelta        Int?    @map("adjustment_delta")
+  reason                 String?
+
+  stockOpname StockOpname @relation(fields: [stockOpnameId], references: [id])
+  product     Product     @relation(fields: [productId], references: [id])
+
+  @@map("stock_opname_items")
+}
+
+model StockMovement {
+  id             BigInt                   @id @default(autoincrement())
+  productId      BigInt                   @map("product_id")
+  locationId     BigInt                   @map("location_id")
+  userId         BigInt?                  @map("user_id")
+  sourceType     StockMovementSourceType  @map("source_type")
+  sourceId       BigInt                   @map("source_id")
+  quantityDelta  Int                      @map("quantity_delta")
+  beforeQty      Int                      @map("before_qty")
+  afterQty       Int                      @map("after_qty")
+  createdAt      DateTime                 @default(now()) @map("created_at")
+
+  product  Product   @relation(fields: [productId], references: [id])
+  location Location  @relation(fields: [locationId], references: [id])
+  user     User?     @relation(fields: [userId], references: [id])
+
+  @@index([sourceType, sourceId])
+  @@index([productId, locationId, createdAt])
+  @@map("stock_movements")
+}
+
+model ExpenseCategory {
+  id   BigInt @id @default(autoincrement())
+  name String @unique
+
+  expenses Expense[]
+
+  @@map("expense_categories")
+}
+
+model Expense {
+  id                 BigInt        @id @default(autoincrement())
+  expenseCategoryId  BigInt        @map("expense_category_id")
+  createdBy          BigInt        @map("created_by")
+  approvedBy         BigInt?       @map("approved_by")
+  status             ExpenseStatus @default(DRAFT)
+  amount             Decimal       @db.Decimal(12, 2)
+  expenseDate        DateTime      @map("expense_date") @db.Date
+  description        String?
+  createdAt          DateTime      @default(now()) @map("created_at")
+
+  category ExpenseCategory @relation(fields: [expenseCategoryId], references: [id])
+  creator  User            @relation("ExpenseCreatedBy", fields: [createdBy], references: [id])
+  approver User?           @relation("ExpenseApprovedBy", fields: [approvedBy], references: [id])
+
+  @@map("expenses")
+}
+
+model AuditLog {
+  id         BigInt   @id @default(autoincrement())
+  actorId    BigInt?  @map("actor_id")
+  action     String
+  entityType String   @map("entity_type")
+  entityId   BigInt   @map("entity_id")
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@map("audit_logs")
 }
