@@ -47,5 +47,62 @@ model Location {
   type     String  // STORE, WAREHOUSE
   isActive Boolean @default(true) @map("is_active")
 
+  inventories Inventory[]
+
   @@map("locations")
+}
+
+model Category {
+  id        BigInt   @id @default(autoincrement())
+  name      String   @unique
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  products  Product[]
+
+  @@map("categories")
+}
+
+model Supplier {
+  id          BigInt   @id @default(autoincrement())
+  name        String
+  contactInfo String?  @map("contact_info")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("suppliers")
+}
+
+model Product {
+  id            BigInt   @id @default(autoincrement())
+  sku           String   @unique
+  name          String
+  categoryId    BigInt   @map("category_id")
+  sellingPrice  Decimal  @map("selling_price") @db.Decimal(12, 2)
+  minimumStock  Int      @default(0) @map("minimum_stock")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  category      Category    @relation(fields: [categoryId], references: [id])
+  inventories   Inventory[]
+
+  @@map("products")
+}
+
+model Inventory {
+  id           BigInt   @id @default(autoincrement())
+  productId    BigInt   @map("product_id")
+  locationId   BigInt   @map("location_id")
+  currentStock Int      @default(0) @map("current_stock")
+  averageCost  Decimal  @default(0) @map("average_cost") @db.Decimal(12, 2)
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  product      Product  @relation(fields: [productId], references: [id])
+  location     Location @relation(fields: [locationId], references: [id])
+
+  @@unique([productId, locationId])
+  @@map("inventories")
 }
