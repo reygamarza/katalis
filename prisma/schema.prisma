@@ -20,6 +20,8 @@ model User {
   confirmedPurchases Purchase[] @relation("PurchaseConfirmedBy")
   receivings         Receiving[]
   purchaseReturns    PurchaseReturn[]
+  sales           Sale[]
+  saleReturns     SaleReturn[]
 
   @@map("users")
 }
@@ -53,6 +55,7 @@ model Location {
 
   inventories Inventory[]
   purchases Purchase[]
+  sales Sale[]
 
   @@map("locations")
 }
@@ -97,6 +100,7 @@ model Product {
   category      Category    @relation(fields: [categoryId], references: [id])
   inventories   Inventory[]
   purchaseItems PurchaseItem[]
+  saleItems SaleItem[]
 
   @@map("products")
 }
@@ -221,4 +225,132 @@ model PurchaseReturnItem {
   receivingItem  ReceivingItem  @relation(fields: [receivingItemId], references: [id])
 
   @@map("purchase_return_items")
+}
+
+enum SaleStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  QRIS
+  TRANSFER
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum ReturnCondition {
+  RESELLABLE
+  DAMAGED
+}
+
+model Customer {
+  id        BigInt   @id @default(autoincrement())
+  name      String
+  phone     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  sales Sale[]
+
+  @@map("customers")
+}
+
+model Sale {
+  id                 BigInt     @id @default(autoincrement())
+  transactionNumber  String     @unique @map("transaction_number")
+  locationId         BigInt     @map("location_id")
+  cashierId          BigInt     @map("cashier_id")
+  customerId         BigInt?    @map("customer_id")
+  status             SaleStatus @default(PENDING)
+  subtotal           Decimal    @db.Decimal(12, 2)
+  discountAmount     Decimal    @default(0) @map("discount_amount") @db.Decimal(12, 2)
+  taxRateSnapshot    Decimal    @default(0) @map("tax_rate_snapshot") @db.Decimal(5, 4)
+  taxAmount          Decimal    @default(0) @map("tax_amount") @db.Decimal(12, 2)
+  total              Decimal    @db.Decimal(12, 2)
+  createdAt          DateTime   @default(now()) @map("created_at")
+  completedAt        DateTime?  @map("completed_at")
+  cancelledAt        DateTime?  @map("cancelled_at")
+
+  location Location  @relation(fields: [locationId], references: [id])
+  cashier  User      @relation(fields: [cashierId], references: [id])
+  customer Customer? @relation(fields: [customerId], references: [id])
+
+  items           SaleItem[]
+  returns         SaleReturn[]
+  paymentAttempts PaymentAttempt[]
+
+  @@map("sales")
+}
+
+model SaleItem {
+  id                        BigInt  @id @default(autoincrement())
+  saleId                    BigInt  @map("sale_id")
+  productId                 BigInt  @map("product_id")
+  productNameSnapshot       String  @map("product_name_snapshot")
+  quantity                  Int
+  unitSellingPriceSnapshot  Decimal @map("unit_selling_price_snapshot") @db.Decimal(12, 2)
+  discountAmount            Decimal @default(0) @map("discount_amount") @db.Decimal(12, 2)
+  unitCostSnapshot          Decimal @map("unit_cost_snapshot") @db.Decimal(12, 2)
+  subtotal                  Decimal @db.Decimal(12, 2)
+
+  sale    Sale    @relation(fields: [saleId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  saleReturnItems SaleReturnItem[]
+
+  @@map("sale_items")
+}
+
+model SaleReturn {
+  id           BigInt   @id @default(autoincrement())
+  returnNumber String   @unique @map("return_number")
+  saleId       BigInt   @map("sale_id")
+  processedBy  BigInt   @map("processed_by")
+  reason       String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  sale      Sale @relation(fields: [saleId], references: [id])
+  processor User @relation(fields: [processedBy], references: [id])
+
+  items SaleReturnItem[]
+
+  @@map("sale_returns")
+}
+
+model SaleReturnItem {
+  id               BigInt          @id @default(autoincrement())
+  saleReturnId     BigInt          @map("sale_return_id")
+  saleItemId       BigInt          @map("sale_item_id")
+  quantityReturned Int             @map("quantity_returned")
+  condition        ReturnCondition
+  refundAmount     Decimal         @map("refund_amount") @db.Decimal(12, 2)
+
+  saleReturn SaleReturn @relation(fields: [saleReturnId], references: [id])
+  saleItem   SaleItem   @relation(fields: [saleItemId], references: [id])
+
+  @@map("sale_return_items")
+}
+
+model PaymentAttempt {
+  id             BigInt        @id @default(autoincrement())
+  saleId         BigInt        @map("sale_id")
+  method         PaymentMethod
+  status         PaymentStatus @default(PENDING)
+  amountReceived Decimal       @map("amount_received") @db.Decimal(12, 2)
+  amountApplied  Decimal       @map("amount_applied") @db.Decimal(12, 2)
+  changeAmount   Decimal       @default(0) @map("change_amount") @db.Decimal(12, 2)
+  referenceCode  String?       @map("reference_code")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  sale Sale @relation(fields: [saleId], references: [id])
+
+  @@map("payment_attempts")
 }
